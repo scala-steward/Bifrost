@@ -20,3 +20,5 @@ addSbtPlugin("net.virtual-void" % "sbt-dependency-graph" % "0.8.2")
 //sbt dependencyTree
 
 addSbtPlugin("org.scala-js" % "sbt-scalajs" % "0.6.18")
+
+addSbtPlugin("pl.project13.scala" % "sbt-jmh" % "0.3.6")
