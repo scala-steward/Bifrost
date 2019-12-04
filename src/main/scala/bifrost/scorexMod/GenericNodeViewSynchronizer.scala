@@ -125,6 +125,7 @@ class GenericNodeViewSynchronizer[P <: Proposition, TX <: Transaction[P], SI <: 
 
         case Younger =>
           juniors.add(remoteHost)
+          //TODO Remove assert, replace with error handling
           assert(extOpt.isDefined)
           val ext = extOpt.get
           ext.groupBy(_._1).mapValues(_.map(_._2)).foreach {

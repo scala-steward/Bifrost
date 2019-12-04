@@ -170,6 +170,7 @@ trait TransferUtil {
           // amount available to send in tx
           val canSend = senderInputBoxes.map(_._3).sum
 
+          //TODO Logic to handle fees paid in arbits or polys
           if(canSend < amount + fee) throw new Exception("Not enough funds to create transaction")
 
           require(canSend >= (toReceive.map(_._2).sum + fee))
