@@ -15,7 +15,9 @@
   "walletSeed": "production-alpha",
   "keyFileDir": "keyfiles/production-alpha",
   "walletDir": ".bifrost/production-alpha/wallet",
-  "dataDir": ".bifrost/production-alpha/data",
+  "dataDir": ".bifrost/production-alpha/blockchain",
+  "pbrDir": "/tmp/bifrost/production-alpha/pbr",
+  "tbrDir": "/tmp/bifrost/production-alpha/tbr",
   "logDir": ".bifrost/production-alpha/log",
   "rpcPort": 9585,
   "rpcAllowed": [],
@@ -24,6 +26,8 @@
   "offlineGeneration": false,
   "testnet": true,
   "blockGenerationDelay": 2000,
-  "cors": false,
-  "verboseAPI": true
+  "cors": true,
+  "verboseAPI": true,
+  "version": [1,0,0],
+  "forkHeight": 0
 }
