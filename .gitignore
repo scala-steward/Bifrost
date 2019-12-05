@@ -31,4 +31,5 @@ examples/lib/
 keyfiles/
 dumps/
 
-docker/project-bifrost-assembly-0.1.1-alpha.jar
+# docker
+docker/*.jar
