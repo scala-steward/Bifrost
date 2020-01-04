@@ -41,7 +41,8 @@ class BifrostStorage(val storage: LSMStore, val settings: ForgingSettings) exten
           case BifrostBlock.ModifierTypeId =>
             val parsed = {
               heightOf(blockId) match {
-                case Some(x) if (x <= settings.forkHeight) => BifrostBlockCompanion.parseBytes2xAndBefore(bytes.tail)
+                case Some(x) if (x <= settings.forkHeight_2x) => BifrostBlockCompanion.parseBytes2xAndBefore(bytes.tail)
+                case Some(x) if (x <= settings.forkHeight_3x) => BifrostBlockCompanion.parseBytesNXT(bytes.tail)
                 case _ => BifrostBlockCompanion.parseBytes(bytes.tail)
               }
             }

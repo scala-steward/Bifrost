@@ -69,7 +69,7 @@ class ForkSpec extends PropSpec
   property("Appending version3 blocks after height = forkHeight should work") {
 
     println(s"history.height: ${history.height}")
-    for(i <- 2L to testSettings_version0.forkHeight) {
+    for(i <- 2L to testSettings_version0.forkHeight_2x) {
       val tempBlock = BifrostBlock(history.bestBlockId,
         System.currentTimeMillis(),
         ArbitBox(PublicKey25519Proposition(history.bestBlockId), 0L, 10000L),
@@ -110,7 +110,7 @@ class ForkSpec extends PropSpec
     history = history.append(tempBlock_version3_2).get._1
     assert(history.modifierById(tempBlock_version3_2.id).isDefined)
 
-    history.height shouldEqual testSettings_version0.forkHeight + 2
+    history.height shouldEqual testSettings_version0.forkHeight_2x + 2
 
     history.storage.rollback(tempBlock_version3_1.parentId)
     history = new BifrostHistory(history.storage,
@@ -122,9 +122,9 @@ class ForkSpec extends PropSpec
       )
     )
 
-    history.height shouldEqual testSettings_version0.forkHeight
+    history.height shouldEqual testSettings_version0.forkHeight_2x
 
-    assert(history.height == testSettings_version0.forkHeight)
+    assert(history.height == testSettings_version0.forkHeight_2x)
   }
 
   property("Appending version0 blocks after height = forkHeight should fail") {

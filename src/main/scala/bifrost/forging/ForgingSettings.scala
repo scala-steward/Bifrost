@@ -40,9 +40,14 @@ trait ForgingSettings extends Settings with ForgingConstants {
     .map(ints => ints(0).toByte)
     .getOrElse(0.toByte)
 
+  lazy val forkHeight_2x = settingsJSON
+    .get("forkHeight_2x")
+    .flatMap(_.asNumber)
+    .flatMap(_.toLong)
+    .getOrElse(0L)
 
-  lazy val forkHeight = settingsJSON
-    .get("forkHeight")
+  lazy val forkHeight_3x = settingsJSON
+    .get("forkHeight_3x")
     .flatMap(_.asNumber)
     .flatMap(_.toLong)
     .getOrElse(0L)

@@ -10,7 +10,7 @@ import bifrost.block.Block._
 import bifrost.crypto.hash.FastCryptographicHash
 import bifrost.serialization.Serializer
 import bifrost.transaction.bifrostTransaction.BifrostTransaction
-import bifrost.transaction.box.proposition.ProofOfKnowledgeProposition
+import bifrost.transaction.box.proposition.{ProofOfKnowledgeProposition, PublicKey25519Proposition}
 import bifrost.transaction.proof.Signature25519
 import bifrost.transaction.serialization.BifrostTransactionCompanion
 import bifrost.transaction.state.PrivateKey25519
@@ -21,15 +21,19 @@ import serializer.BloomTopics
 import scala.annotation.tailrec
 import scala.collection.BitSet
 import scala.util.Try
-
+import bifrost.consensus.ouroboros.OuroborosPrimitives._
+import bifrost.consensus.ouroboros.{OuroborosCertificate,OuroborosCertificateCompanion}
 
 case class BifrostBlock(override val parentId: BlockId,
                         override val timestamp: Block.Timestamp,
-                        forgerBox: ArbitBox,
-                        signature: Signature25519,
+                        forgerBox: ArbitBox = ArbitBox(PublicKey25519Proposition(Array()),0L,0L),
+                        signature: Signature25519 = Signature25519(Array()),
                         txs: Seq[BifrostTransaction],
                         inflation: Long = 0L,
-                        protocolVersion: Version)
+                        ouroborosCertificate: OuroborosCertificate = OuroborosCertificate.empty,
+                        kesSignature: KesSignature = (Array(),Array(),Array()),
+                        protocolVersion: Version
+                       )
   extends Block[ProofOfKnowledgeProposition[PrivateKey25519], BifrostTransaction] {
 
   override type M = BifrostBlock
@@ -77,7 +81,7 @@ object BifrostBlock {
              version: Version): BifrostBlock = {
     assert(box.proposition.pubKeyBytes sameElements privateKey.publicKeyBytes)
 
-    val unsigned = BifrostBlock(parentId, timestamp, box, Signature25519(Array.empty), txs, inflation, version)
+    val unsigned = BifrostBlock(parentId, timestamp, box, Signature25519(Array.empty), txs, inflation, protocolVersion = version)
     if (parentId sameElements Array.fill(32)(1: Byte)) {
       // genesis block will skip signature check
       val genesisSignature = Array.fill(Curve25519.SignatureLength25519)(1: Byte)
@@ -102,7 +106,63 @@ object BifrostBlock {
 
 object BifrostBlockCompanion extends Serializer[BifrostBlock] {
 
-  def commonMessage(block: BifrostBlock): Array[Byte] = {
+  def messageToSign(block: BifrostBlock): Array[Byte] = {
+    val commonBytes: Array[Byte] = {
+      block.version match {
+        case `obversion` => commonMessageOuroboros(block)
+        case 0 => commonMessage2xAndBefore(block)
+        case _ => commonMessageNXT(block)
+      }
+    }
+    //noinspection ScalaStyle
+    if (block.parentId sameElements Array.fill(32)(1: Byte)) {
+      commonBytes ++ block.txs.foldLeft(Array[Byte]())((bytes, tx) => bytes ++ Ints.toByteArray(BifrostTransactionCompanion.toBytes(tx).length) ++ tx.messageToSign)
+    } else {
+      commonBytes ++ block.txs.foldLeft(Array[Byte]())((bytes, tx) => bytes ++ Ints.toByteArray(BifrostTransactionCompanion.toBytes(tx).length) ++ BifrostTransactionCompanion.toBytes(tx))
+    }
+  }
+
+  override def toBytes(block: BifrostBlock): Array[Byte] = {
+    block.version match {
+      case `obversion` =>
+        commonMessageOuroboros(block) ++ block.txs.foldLeft(Array[Byte]())((bytes, tx) =>
+          bytes ++
+            Ints.toByteArray(BifrostTransactionCompanion.toBytes(tx).length) ++
+            BifrostTransactionCompanion.toBytes(tx))
+      case 0 =>
+        commonMessage2xAndBefore(block) ++ block.txs.foldLeft(Array[Byte]())((bytes, tx) =>
+          bytes ++
+            Ints.toByteArray(BifrostTransactionCompanion.toBytes(tx).length) ++
+            BifrostTransactionCompanion.toBytes(tx))
+      case _ =>
+        commonMessageNXT(block) ++ block.txs.foldLeft(Array[Byte]())((bytes, tx) =>
+          bytes ++
+            Ints.toByteArray(BifrostTransactionCompanion.toBytes(tx).length) ++
+            BifrostTransactionCompanion.toBytes(tx))
+    }
+  }
+
+  def commonMessageOuroboros(block: BifrostBlock): Array[Byte] = {
+    val numTx = Ints.toByteArray(block.txs.length)
+
+    Bytes.concat(
+      block.parentId,
+      Longs.toByteArray(block.timestamp),
+      Array(block.version),
+      Longs.toByteArray(block.inflation),
+      OuroborosCertificateCompanion.toBytes(block.ouroborosCertificate),
+      block.signature.signature,
+      Ints.toByteArray(block.kesSignature._1.length),
+      block.kesSignature._1,
+      Ints.toByteArray(block.kesSignature._2.length),
+      block.kesSignature._2,
+      Ints.toByteArray(block.kesSignature._3.length),
+      block.kesSignature._3,
+      numTx // writes number of transactions, then adds <tx as bytes>| <number of bytes for tx as bytes> for each tx
+    )
+  }
+
+  def commonMessageNXT(block: BifrostBlock): Array[Byte] = {
     val numTx = Ints.toByteArray(block.txs.length)
     val generatorBoxBytes = BifrostBoxSerializer.toBytes(block.forgerBox)
 
@@ -133,37 +193,84 @@ object BifrostBlockCompanion extends Serializer[BifrostBlock] {
     )
   }
 
-  def messageToSign(block: BifrostBlock): Array[Byte] = {
-    val commonBytes: Array[Byte] = {
-      block.version match {
-        case 0 => commonMessage2xAndBefore(block)
-        case _ => commonMessage(block)
-      }
-    }
-    //noinspection ScalaStyle
-    if (block.parentId sameElements Array.fill(32)(1: Byte)) {
-      commonBytes ++ block.txs.foldLeft(Array[Byte]())((bytes, tx) => bytes ++ Ints.toByteArray(BifrostTransactionCompanion.toBytes(tx).length) ++ tx.messageToSign)
-    } else {
-      commonBytes ++ block.txs.foldLeft(Array[Byte]())((bytes, tx) => bytes ++ Ints.toByteArray(BifrostTransactionCompanion.toBytes(tx).length) ++ BifrostTransactionCompanion.toBytes(tx))
-    }
-  }
-
-  override def toBytes(block: BifrostBlock): Array[Byte] = {
-    block.version match {
-      case 0 =>
-        commonMessage2xAndBefore(block) ++ block.txs.foldLeft(Array[Byte]())((bytes, tx) =>
-          bytes ++
-            Ints.toByteArray(BifrostTransactionCompanion.toBytes(tx).length) ++
-            BifrostTransactionCompanion.toBytes(tx))
-      case _ =>
-        commonMessage(block) ++ block.txs.foldLeft(Array[Byte]())((bytes, tx) =>
-          bytes ++
-            Ints.toByteArray(BifrostTransactionCompanion.toBytes(tx).length) ++
-            BifrostTransactionCompanion.toBytes(tx))
-    }
-  }
-
   override def parseBytes(bytes: Array[ModifierTypeId]): Try[BifrostBlock] = Try {
+    var remainingBytes = bytes
+
+    val parentId = remainingBytes.take(Block.BlockIdLength)
+    remainingBytes = remainingBytes.drop(Block.BlockIdLength)
+
+    val timestamp: Long = Longs.fromByteArray(remainingBytes.take(Longs.BYTES))
+    remainingBytes = remainingBytes.drop(Longs.BYTES)
+
+    val version = remainingBytes.take(1).head
+    remainingBytes = remainingBytes.drop(1)
+
+    val inflation = remainingBytes.take(Longs.BYTES)
+    remainingBytes = remainingBytes.drop(Longs.BYTES)
+
+    val certificate:OuroborosCertificate = OuroborosCertificateCompanion.parseBytes(remainingBytes.take(CERT_LEN)).get
+    remainingBytes = remainingBytes.drop(CERT_LEN)
+
+    val signature = Signature25519(remainingBytes.take(Signature25519.SignatureSize))
+    remainingBytes = remainingBytes.drop(Signature25519.SignatureSize)
+
+    val sig1len = Ints.fromByteArray(remainingBytes.take(Ints.BYTES))
+    remainingBytes = remainingBytes.drop(Ints.BYTES)
+    val sig1 = remainingBytes.take(sig1len)
+    remainingBytes = remainingBytes.drop(sig1len)
+
+    val sig2len = Ints.fromByteArray(remainingBytes.take(Ints.BYTES))
+    remainingBytes = remainingBytes.drop(Ints.BYTES)
+    val sig2 = remainingBytes.take(sig2len)
+    remainingBytes = remainingBytes.drop(sig2len)
+
+    val sig3len = Ints.fromByteArray(remainingBytes.take(Ints.BYTES))
+    remainingBytes = remainingBytes.drop(Ints.BYTES)
+    val sig3 = remainingBytes.take(sig3len)
+    remainingBytes = remainingBytes.drop(sig3len)
+
+    val kesSignature:KesSignature = (sig1,sig2,sig3)
+
+    val numTxExpected = Ints.fromByteArray(remainingBytes.take(Ints.BYTES))
+    remainingBytes = remainingBytes.drop(Ints.BYTES)
+
+    def unfoldLeft[A,B](seed: B)(f: B => Option[(B, A)]): Seq[A] = {
+      @tailrec
+      def loop(seed: B)(ls: Seq[A]): Seq[A] = f(seed) match {
+        case Some((b, a)) => loop(b)(a +: ls)
+        case None => ls
+      }
+      loop(seed)(Nil)
+    }.reverse
+
+    val txBytes: Array[Byte] = remainingBytes
+
+    val txByteSeq: Seq[Array[Byte]] = unfoldLeft(txBytes) {
+      case b if b.length < Ints.BYTES => None
+      case b =>
+        val bytesToGrab = Ints.fromByteArray(b.take(Ints.BYTES))
+
+        if (b.length - Ints.BYTES < bytesToGrab) {
+          None // we're done because we can't grab the number of bytes required
+        } else {
+          val thisTx: Array[Byte] = b.slice(Ints.BYTES, Ints.BYTES + bytesToGrab)
+          Some((b.slice(Ints.BYTES + bytesToGrab, b.length), thisTx))
+        }
+    }.ensuring(_.length == numTxExpected)
+
+    val tx: Seq[BifrostTransaction] = txByteSeq.map(tx => BifrostTransactionCompanion.parseBytes(tx).get)
+
+    BifrostBlock(parentId,
+      timestamp,
+      signature = signature,
+      txs = tx,
+      inflation = Longs.fromByteArray(inflation),
+      ouroborosCertificate = certificate,
+      kesSignature = kesSignature ,
+      protocolVersion = version)
+  }
+
+  def parseBytesNXT(bytes: Array[ModifierTypeId]): Try[BifrostBlock] = Try {
 
     val parentId = bytes.slice(0, Block.BlockIdLength)
 
@@ -213,7 +320,7 @@ object BifrostBlockCompanion extends Serializer[BifrostBlock] {
 
     val tx: Seq[BifrostTransaction] = txByteSeq.map(tx => BifrostTransactionCompanion.parseBytes(tx).get)
 
-    BifrostBlock(parentId, timestamp, generatorBox, signature, tx, Longs.fromByteArray(inflation), version)
+    BifrostBlock(parentId, timestamp, generatorBox, signature, tx, Longs.fromByteArray(inflation), protocolVersion = version)
   }
 
 

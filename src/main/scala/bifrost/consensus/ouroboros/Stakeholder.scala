@@ -96,7 +96,7 @@ class Stakeholder(seed:Array[Byte]) extends Actor
       breakable{
         while(foundAncestor) {
           getParentId(tine.head) match {
-            case pb:BlockId => {
+            case pb:BlockSlotId => {
               tine = Array(pb) ++ tine
               if (tine.head == localChain(tine.head._1)) {
                 prefix = tine.head._1
@@ -138,7 +138,7 @@ class Stakeholder(seed:Array[Byte]) extends Actor
     } else {
       breakable{
         while (true) {
-          id = getParentId(id) match {case value:BlockId => value}
+          id = getParentId(id) match {case value:BlockSlotId => value}
           getBlock(id) match {
             case b:Block => {
               val bni = b._9
@@ -173,7 +173,7 @@ class Stakeholder(seed:Array[Byte]) extends Actor
     breakable{
       while(foundAncestor) {
         getParentId(tine.head) match {
-          case pb:BlockId => {
+          case pb:BlockSlotId => {
             tine = Array(pb) ++ tine
             if (tine.head == localChain(tine.head._1)) {
               prefix = tine.head._1
@@ -325,7 +325,7 @@ class Stakeholder(seed:Array[Byte]) extends Actor
     var pid = localChain.head
     for (id <- localChain.tail) {
       getParentId(id) match {
-        case bid:BlockId => {
+        case bid:BlockSlotId => {
           if (bid == pid) {
             pid = id
           } else {
@@ -546,8 +546,8 @@ class Stakeholder(seed:Array[Byte]) extends Actor
         value.s match {
           case s:Box => if (inbox.keySet.contains(s._2)) {
             s._1 match {
-              case bInfo: (Block,BlockId) => {
-                val bid:BlockId = bInfo._2
+              case bInfo: (Block,BlockSlotId) => {
+                val bid:BlockSlotId = bInfo._2
                 val foundBlock = blocks(bid._1).contains(bid._2)
                 if (!foundBlock) {
                   val b:Block = bInfo._1
@@ -590,14 +590,14 @@ class Stakeholder(seed:Array[Byte]) extends Actor
         value.s match {
           case s:Box => if (inbox.keySet.contains(s._2)) {
             s._1 match {
-              case returnedBlocks: (Int,List[(Block,BlockId)]) => {
+              case returnedBlocks: (Int,List[(Block,BlockSlotId)]) => {
                 if (holderIndex == sharedData.printingHolder && printFlag) {
                   println("Holder " + holderIndex.toString + " Got Blocks")
                 }
                 val jobNumber:Int = returnedBlocks._1
                 val bList = returnedBlocks._2
                 for (bInfo <- bList) {
-                  val bid:BlockId = bInfo._2
+                  val bid:BlockSlotId = bInfo._2
                   val foundBlock = blocks(bid._1).contains(bid._2)
                   if (!foundBlock) {
                     val b:Block = bInfo._1
@@ -641,7 +641,7 @@ class Stakeholder(seed:Array[Byte]) extends Actor
               val ref = inbox(s._2)._1
               s._1 match {
                 case request:BlockRequest => {
-                  val id:BlockId = request._1
+                  val id:BlockSlotId = request._1
                   val job:Int = request._2
                   if (blocks(id._1).contains(id._2)) {
                     if (verifyBox(s)) {
@@ -679,11 +679,11 @@ class Stakeholder(seed:Array[Byte]) extends Actor
               val ref = inbox(s._2)._1
               s._1 match {
                 case request:ChainRequest => {
-                  val startId:BlockId = request._1
+                  val startId:BlockSlotId = request._1
                   val depth:Int = request._2
                   val job:Int = request._3
                   var parentFound = blocks(startId._1).contains(startId._2)
-                  var returnedBlockList:List[(Block,BlockId)] = List()
+                  var returnedBlockList:List[(Block,BlockSlotId)] = List()
                   if (depth <= tineMaxDepth && parentFound) {
                     if (verifyBox(s)) {
                       var id = startId

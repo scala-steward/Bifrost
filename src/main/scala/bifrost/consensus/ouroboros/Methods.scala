@@ -44,7 +44,7 @@ trait Methods
     * @param bid
     * @return block if found, 0 otherwise
     */
-  def getBlock(bid:BlockId): Any = {
+  def getBlock(bid:BlockSlotId): Any = {
     if (bid._1 >= 0 && !bid._2.data.isEmpty) {
       if (blocks(bid._1).contains(bid._2)) {
         blocks(bid._1)(bid._2)
@@ -78,7 +78,7 @@ trait Methods
     * @param bid
     * @return parent id if found, 0 otherwise
     */
-  def getParentId(bid:BlockId): Any = {
+  def getParentId(bid:BlockSlotId): Any = {
     getBlock(bid) match {
       case b:Block => (b._10,b._1)
       case _ => 0
@@ -396,7 +396,7 @@ trait Methods
     var tr_Ep = 0.0
     var eta_Ep: Eta = eta(c, 0)
     var stakingState: State = Map()
-    var pid:BlockId = (0,gh)
+    var pid:BlockSlotId = (0,gh)
     var i = 0
 
     getBlock(c(0)) match {
@@ -516,12 +516,12 @@ trait Methods
     var ep = ep0
     var alpha_Ep = 0.0
     var tr_Ep = 0.0
-    var pid:BlockId = (0,ByteArrayWrapper(Array()))
+    var pid:BlockSlotId = (0,ByteArrayWrapper(Array()))
     var i = prefix+1
     breakable{
       for (id<-tine) {
         if (!id._2.data.isEmpty) {
-          pid = getParentId(id) match {case value:BlockId => value}
+          pid = getParentId(id) match {case value:BlockSlotId => value}
           break()
         }
       }

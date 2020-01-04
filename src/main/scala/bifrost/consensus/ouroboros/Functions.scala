@@ -17,7 +17,7 @@ trait Functions
     * @param b
     * @return parent id
     */
-  def getParentId(b:Block): BlockId = {
+  def getParentId(b:Block): BlockSlotId = {
     (b._10,b._1)
   }
 
