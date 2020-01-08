@@ -90,7 +90,7 @@ class BifrostHistory(val storage: BifrostStorage,
         storage.update(block, settings.InitialDifficulty, isBest = true)
         val progInfo = ProgressInfo(None, Seq(), Seq(block))
         (new BifrostHistory(storage, settings, validators), progInfo)
-      } else {
+      } else if (storage.heightOf(block.parentId).get < settings.forkHeight_3x) {
         val parent = modifierById(block.parentId).get
         val oldDifficulty = storage.difficultyOf(block.parentId).get
         var difficulty = (oldDifficulty * settings.targetBlockTime.length) / (block.timestamp - parent.timestamp)
@@ -107,6 +107,10 @@ class BifrostHistory(val storage: BifrostStorage,
           bestForkChanges(block)
         }
         storage.update(block, difficulty, builtOnBestChain)
+        (new BifrostHistory(storage, settings, validators), mod)
+      } else {
+        val mod: ProgressInfo[BifrostBlock] = ProgressInfo(None, Seq(), Seq())
+        storage.update(block, 0L, false)
         (new BifrostHistory(storage, settings, validators), mod)
       }
     }

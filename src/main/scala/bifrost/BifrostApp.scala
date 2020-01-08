@@ -14,6 +14,7 @@ import akka.actor.{ActorRef, Props}
 import bifrost.api.http._
 import bifrost.blocks.BifrostBlock
 import bifrost.forging.{Forger, ForgingSettings}
+import bifrost.consensus.ouroboros.Stakeholder
 import bifrost.history.BifrostSyncInfoMessageSpec
 import bifrost.network.BifrostNodeViewSynchronizer
 import bifrost.scorexMod.GenericApplication
@@ -53,9 +54,12 @@ class BifrostApp(val settingsFilename: String) extends GenericApplication with R
   override protected lazy val additionalMessageSpecs: Seq[MessageSpec[_]] =
     Seq(BifrostSyncInfoMessageSpec)
 
+  println("*****************************")
+  val stakeHolderRef: ActorRef = actorSystem.actorOf(Stakeholder.props)
+
   override val nodeViewHolderRef: ActorRef = actorSystem.actorOf(Props(new NVHT(settings)))
 
-  val forger: ActorRef = actorSystem.actorOf(Props(classOf[Forger], settings, nodeViewHolderRef))
+  val forger: ActorRef = actorSystem.actorOf(Props(classOf[Forger], settings, nodeViewHolderRef, stakeHolderRef))
 
   override val localInterface: ActorRef = actorSystem.actorOf(
     Props(classOf[BifrostLocalInterface], nodeViewHolderRef, forger, settings)
@@ -139,6 +143,6 @@ class BifrostApp(val settingsFilename: String) extends GenericApplication with R
 }
 
 object BifrostApp extends App {
-  val settingsFilename = args.headOption.getOrElse("testnet-private.json")
+  val settingsFilename = args.headOption.getOrElse("ouroboros-testnet.json")
   new BifrostApp(settingsFilename).run()
 }

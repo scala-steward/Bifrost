@@ -32,7 +32,7 @@ import scala.util.Try
 trait ForgerSettings extends Settings {
 }
 
-class Forger(forgerSettings: ForgingSettings, viewHolderRef: ActorRef) extends Actor with ActorLogging {
+class Forger(forgerSettings: ForgingSettings, viewHolderRef: ActorRef, stakeHolderRef: ActorRef) extends Actor with ActorLogging {
 
   import bifrost.forging.Forger._
 
@@ -96,31 +96,43 @@ class Forger(forgerSettings: ForgingSettings, viewHolderRef: ActorRef) extends A
 
     case TryForging(h: BifrostHistory, s: BifrostState, w: BWallet, m: BifrostMemPool) =>
       if (forging) {
-        log.info(s"${Console.CYAN}Trying to generate a new block, chain length: ${h.height}${Console.RESET}")
-        log.info("chain difficulty: " + h.difficulty)
-
-        val boxes: Seq[ArbitBox] = w.boxes().filter(_.box match {
-          case a: ArbitBox => s.closedBox(a.id).isDefined
-          case _ => false
-        }).map(_.box.asInstanceOf[ArbitBox])
-
-        val boxKeys = boxes.flatMap(b => w.secretByPublicImage(b.proposition).map(s => (b, s)))
-
         val parent = h.bestBlock
-        log.debug(s"Trying to generate block on top of ${parent.encodedId} with balance " +
-          s"${boxKeys.map(_._1.value).sum}")
 
-        val adjustedTarget = calcAdjustedTarget(h.difficulty, parent, forgerSettings.targetBlockTime.length)
+        h.storage.heightOf(parent.id) match {
+          case Some(x) if (x <= forgerSettings.forkHeight_3x) => {
+            log.info(s"${Console.CYAN}Trying to generate a new block, chain length: ${h.height}${Console.RESET}")
+            log.info("chain difficulty: " + h.difficulty)
 
-        iteration(parent, boxKeys, pickTransactions(m, s, parent, (h, s, w, m)).get, adjustedTarget, forgerSettings.version) match {
-          case Some(block) =>
-            log.debug(s"Locally generated block: $block")
-            viewHolderRef !
-              LocallyGeneratedModifier[ProofOfKnowledgeProposition[PrivateKey25519], BifrostTransaction, BifrostBlock](block)
-          case None =>
-            log.debug(s"Failed to generate block")
+            val boxes: Seq[ArbitBox] = w.boxes().filter(_.box match {
+              case a: ArbitBox => s.closedBox(a.id).isDefined
+              case _ => false
+            }).map(_.box.asInstanceOf[ArbitBox])
+
+            val boxKeys = boxes.flatMap(b => w.secretByPublicImage(b.proposition).map(s => (b, s)))
+
+
+            log.debug(s"Trying to generate block on top of ${parent.encodedId} with balance " +
+              s"${boxKeys.map(_._1.value).sum}")
+
+            val adjustedTarget = calcAdjustedTarget(h.difficulty, parent, forgerSettings.targetBlockTime.length)
+
+            iteration(parent, boxKeys, pickTransactions(m, s, parent, (h, s, w, m)).get, adjustedTarget, forgerSettings.version) match {
+              case Some(block) =>
+                log.debug(s"Locally generated block: $block")
+                viewHolderRef !
+                  LocallyGeneratedModifier[ProofOfKnowledgeProposition[PrivateKey25519], BifrostTransaction, BifrostBlock](block)
+              case None =>
+                log.debug(s"Failed to generate block")
+            }
+            context.system.scheduler.scheduleOnce(forgerSettings.blockGenerationDelay)(viewHolderRef ! GetCurrentView)
+          }
+          case _ => {
+            log.info(s"${Console.CYAN}Trying to generate a new ouroboros block, chain length: ${h.height}${Console.RESET}")
+
+          }
         }
-        context.system.scheduler.scheduleOnce(forgerSettings.blockGenerationDelay)(viewHolderRef ! GetCurrentView)
+
+
       }
   }
 }

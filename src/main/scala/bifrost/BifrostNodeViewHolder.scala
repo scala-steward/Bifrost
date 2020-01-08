@@ -1,5 +1,6 @@
 package bifrost
 
+import akka.actor.ActorRef
 import bifrost.blocks.{BifrostBlock, BifrostBlockCompanion}
 import bifrost.forging.ForgingSettings
 import bifrost.history.{BifrostHistory, BifrostSyncInfo}

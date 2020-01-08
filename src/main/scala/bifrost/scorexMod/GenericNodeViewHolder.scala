@@ -33,7 +33,6 @@ trait GenericNodeViewHolder[T, P <: Proposition, TX <: GenericBoxTransaction[P, 
 
   type NodeView = (HIS, MS, VL, MP)
 
-
   val modifierCompanions: Map[ModifierTypeId, Serializer[_ <: NodeViewModifier]]
 
   val networkChunkSize: Int

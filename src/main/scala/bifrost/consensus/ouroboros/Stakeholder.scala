@@ -16,10 +16,10 @@ import scala.util.control.Breaks._
   * sends the coordinator the public key upon instantiation and gets the genesis block from coordinator
   */
 
-class Stakeholder(seed:Array[Byte]) extends Actor
-  //with Timers
+class Stakeholder extends Actor
   with Methods
   with StakeholderVariables {
+  val seed = hash("seed").data
   val holderId:ActorPath = self.path
   val sessionId:Sid = ByteArrayWrapper(FastCryptographicHash(holderId.toString))
   rng = new Random(BigInt(seed).toLong)
@@ -27,11 +27,6 @@ class Stakeholder(seed:Array[Byte]) extends Actor
   var chainUpdateLock = false
   val keys:Keys = Keys(seed,sig,vrf,kes,0)
   val wallet:Wallet = new Wallet(keys.pkw)
-
-  private case object timerKey
-
-
-  /*************************Honest************************************/
 
   def blockInfo:String = {
     "forger_index:"+holderIndex.toString+",adversarial:"+adversary.toString+",eta:"+Base58.encode(eta)+",epoch:"+currentEpoch.toString
@@ -1077,6 +1072,6 @@ class Stakeholder(seed:Array[Byte]) extends Actor
 }
 
 object Stakeholder {
-  def props(seed:Array[Byte]): Props = Props(new Stakeholder(seed))
+  def props: Props = Props(new Stakeholder)
 }
 
