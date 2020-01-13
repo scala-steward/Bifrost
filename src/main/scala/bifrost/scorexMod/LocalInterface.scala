@@ -75,13 +75,15 @@ trait LocalInterface[P <: Proposition, TX <: Transaction[P], PMOD <: PersistentN
 
 object LocalInterface {
 
+  import bifrost.consensus.NodeViewProcessor.ProcessorModifier
+
   case object NoBetterNeighbour
 
   case object BetterNeighbourAppeared
 
-  case class LocallyGeneratedTransaction[P <: Proposition, TX <: Transaction[P]](tx: TX)
+  case class LocallyGeneratedTransaction[P <: Proposition, TX <: Transaction[P]](tx: TX) extends ProcessorModifier
 
   case class LocallyGeneratedModifier[P <: Proposition, TX <: Transaction[P], PMOD <: PersistentNodeViewModifier[P, TX]]
-  (pmod: PMOD)
+  (pmod: PMOD) extends ProcessorModifier
 
 }

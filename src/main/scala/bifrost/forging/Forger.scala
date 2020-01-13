@@ -29,9 +29,6 @@ import bifrost.transaction.bifrostTransaction.{BifrostTransaction, CoinbaseTrans
 
 import scala.util.Try
 
-trait ForgerSettings extends Settings {
-}
-
 class Forger(forgerSettings: ForgingSettings, viewHolderRef: ActorRef, stakeHolderRef: ActorRef) extends Actor with ActorLogging {
 
   import bifrost.forging.Forger._
@@ -44,8 +41,6 @@ class Forger(forgerSettings: ForgingSettings, viewHolderRef: ActorRef, stakeHold
 
   //set to true for initial generator
   private var forging = forgerSettings.offlineGeneration
-
-  private val hash = FastCryptographicHash
 
   override def preStart(): Unit = {
     if (forging) context.system.scheduler.scheduleOnce(1.second)(self ! StartForging)

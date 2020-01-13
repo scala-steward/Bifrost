@@ -1,6 +1,5 @@
 package bifrost
 
-import akka.actor.ActorRef
 import bifrost.blocks.{BifrostBlock, BifrostBlockCompanion}
 import bifrost.forging.ForgingSettings
 import bifrost.history.{BifrostHistory, BifrostSyncInfo}
@@ -17,18 +16,25 @@ import bifrost.transaction.bifrostTransaction.{ArbitTransfer, BifrostTransaction
 import bifrost.transaction.box.proposition.{ProofOfKnowledgeProposition, PublicKey25519Proposition}
 import bifrost.transaction.serialization.BifrostTransactionCompanion
 import bifrost.transaction.state.{PrivateKey25519, PrivateKey25519Companion}
+import bifrost.types.BifrostTypes
 import bifrost.utils.ScorexLogging
 import scorex.crypto.encode.Base58
 
 class BifrostNodeViewHolder(settings: ForgingSettings)
-  extends GenericNodeViewHolder[Any, ProofOfKnowledgeProposition[PrivateKey25519], BifrostTransaction, BifrostBox, BifrostBlock] {
+  extends GenericNodeViewHolder[
+    Any,
+    ProofOfKnowledgeProposition[PrivateKey25519],
+    BifrostTransaction,
+    BifrostBox,
+    BifrostBlock,
+    BifrostSyncInfo,
+    BifrostHistory,
+    BifrostState,
+    BWallet,
+    BifrostMemPool
+  ] {
 
   override val networkChunkSize: Int = settings.networkChunkSize
-  override type SI = BifrostSyncInfo
-  override type HIS = BifrostHistory
-  override type MS = BifrostState
-  override type VL = BWallet
-  override type MP = BifrostMemPool
 
   override lazy val modifierCompanions: Map[ModifierTypeId, Serializer[_ <: NodeViewModifier]] =
     Map(BifrostBlock.ModifierTypeId -> BifrostBlockCompanion,
@@ -64,13 +70,18 @@ class BifrostNodeViewHolder(settings: ForgingSettings)
   }
 }
 
-object BifrostNodeViewHolder extends ScorexLogging {
-  type HIS = BifrostHistory
-  type MS = BifrostState
-  type VL = BWallet
-  type MP = BifrostMemPool
-
-  type NodeView = (HIS, MS, VL, MP)
+object BifrostNodeViewHolder extends BifrostTypes[
+  Any,
+  ProofOfKnowledgeProposition[PrivateKey25519],
+  BifrostTransaction,
+  BifrostBox,
+  BifrostBlock,
+  BifrostSyncInfo,
+  BifrostHistory,
+  BifrostState,
+  BWallet,
+  BifrostMemPool
+  ] with ScorexLogging {
 
   //noinspection ScalaStyle
   def initializeGenesis(settings: ForgingSettings): NodeView = {

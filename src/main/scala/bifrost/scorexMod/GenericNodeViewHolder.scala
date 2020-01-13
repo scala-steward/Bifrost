@@ -16,22 +16,26 @@ import bifrost.transaction.{MemoryPool, Transaction}
 import bifrost.utils.ScorexLogging
 import bifrost.{NodeViewModifier, PersistentNodeViewModifier}
 import scorex.crypto.encode.Base58
+import bifrost.types.BifrostTypes
 
 import scala.collection.mutable
 import scala.util.{Failure, Success}
 
-trait GenericNodeViewHolder[T, P <: Proposition, TX <: GenericBoxTransaction[P, T, BX], BX <: GenericBox[P, T], PMOD <: PersistentNodeViewModifier[P, TX]]
-  extends Actor with ScorexLogging {
+trait GenericNodeViewHolder[
+  T,
+  P <: Proposition,
+  TX <: GenericBoxTransaction[P, T, BX],
+  BX <: GenericBox[P, T],
+  PMOD <: PersistentNodeViewModifier[P, TX],
+  SI <: SyncInfo,
+  HIS <: History[P, TX, PMOD, SI, HIS],
+  MS <: GenericBoxMinimalState[T, P, BX, TX, PMOD, MS],
+  VL <: Vault[P, TX, PMOD, VL],
+  MP <: MemoryPool[TX, MP]
+]
+  extends BifrostTypes[T,P,TX,BX,PMOD,SI,HIS,MS,VL,MP] with Actor with ScorexLogging {
 
   import GenericNodeViewHolder._
-
-  type SI <: SyncInfo
-  type HIS <: History[P, TX, PMOD, SI, HIS]
-  type MS <: GenericBoxMinimalState[T, P, BX, TX, PMOD, MS]
-  type VL <: Vault[P, TX, PMOD, VL]
-  type MP <: MemoryPool[TX, MP]
-
-  type NodeView = (HIS, MS, VL, MP)
 
   val modifierCompanions: Map[ModifierTypeId, Serializer[_ <: NodeViewModifier]]
 

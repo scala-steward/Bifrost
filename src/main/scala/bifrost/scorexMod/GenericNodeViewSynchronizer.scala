@@ -230,6 +230,8 @@ class GenericNodeViewSynchronizer[P <: Proposition, TX <: Transaction[P], SI <: 
 
 object GenericNodeViewSynchronizer {
 
+  import bifrost.consensus.NodeViewProcessor.ProcessorModifier
+
   case object GetLocalSyncInfo
 
   case class CompareViews(source: ConnectedPeer, modifierTypeId: ModifierTypeId, modifierIds: Seq[ModifierId])
@@ -240,7 +242,7 @@ object GenericNodeViewSynchronizer {
 
   case class ResponseFromLocal[M <: NodeViewModifier](source: ConnectedPeer, modifierTypeId: ModifierTypeId, localObjects: Seq[M])
 
-  case class ModifiersFromRemote(source: ConnectedPeer, modifierTypeId: ModifierTypeId, remoteObjects: Seq[Array[Byte]])
+  case class ModifiersFromRemote(source: ConnectedPeer, modifierTypeId: ModifierTypeId, remoteObjects: Seq[Array[Byte]]) extends ProcessorModifier
 
   case class OtherNodeSyncingInfo[SI <: SyncInfo](peer: ConnectedPeer, syncInfo: SI)
 

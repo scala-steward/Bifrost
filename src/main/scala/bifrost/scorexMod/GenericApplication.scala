@@ -5,23 +5,33 @@ import akka.http.scaladsl.Http
 import akka.stream.ActorMaterializer
 import bifrost.PersistentNodeViewModifier
 import bifrost.api.http.{ApiRoute, CompositeHttpService}
+import bifrost.consensus.{History, SyncInfo}
 import bifrost.network.message._
 import bifrost.network.peer.PeerManager
 import bifrost.network.{NetworkController, UPnP}
 import bifrost.settings.Settings
+import bifrost.transaction.MemoryPool
 import bifrost.transaction.box.proposition.Proposition
+import bifrost.transaction.wallet.Vault
+import bifrost.types.BifrostTypes
 import bifrost.utils.ScorexLogging
 
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.reflect.runtime.universe.Type
 
-trait GenericApplication extends ScorexLogging {
-
-  type P <: Proposition
-  type TX <: GenericBoxTransaction[P, _, BX]
-  type BX <: GenericBox[P, _]
-  type PMOD <: PersistentNodeViewModifier[P, TX]
-  type NVHT <: GenericNodeViewHolder[_, P, TX, BX, PMOD]
+trait GenericApplication[
+  T,
+  P <: Proposition,
+  TX <: GenericBoxTransaction[P, T, BX],
+  BX <: GenericBox[P, T],
+  PMOD <: PersistentNodeViewModifier[P, TX],
+  SI <: SyncInfo,
+  HIS <: History[P, TX, PMOD, SI, HIS],
+  MS <: GenericBoxMinimalState[T, P, BX, TX, PMOD, MS],
+  VL <: Vault[P, TX, PMOD, VL],
+  MP <: MemoryPool[TX, MP],
+  NVHT <: GenericNodeViewHolder[T, P, TX, BX, PMOD,SI,HIS,MS,VL,MP]
+] extends BifrostTypes[T,P,TX,BX,PMOD,SI,HIS,MS,VL,MP] with ScorexLogging {
 
   val ApplicationNameLimit = 50
 

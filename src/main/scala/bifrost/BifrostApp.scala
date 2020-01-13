@@ -15,7 +15,7 @@ import bifrost.api.http._
 import bifrost.blocks.BifrostBlock
 import bifrost.forging.{Forger, ForgingSettings}
 import bifrost.consensus.ouroboros.Stakeholder
-import bifrost.history.BifrostSyncInfoMessageSpec
+import bifrost.history.{BifrostHistory, BifrostSyncInfo, BifrostSyncInfoMessageSpec}
 import bifrost.network.BifrostNodeViewSynchronizer
 import bifrost.scorexMod.GenericApplication
 import bifrost.transaction.box.BifrostBox
@@ -26,25 +26,27 @@ import bifrost.transaction.box.proposition.ProofOfKnowledgeProposition
 import bifrost.transaction.state.PrivateKey25519
 import java.lang.management.ManagementFactory
 
+import bifrost.mempool.BifrostMemPool
+import bifrost.state.BifrostState
 import bifrost.transaction.bifrostTransaction.BifrostTransaction
+import bifrost.wallet.BWallet
 import com.sun.management.HotSpotDiagnosticMXBean
 
 import scala.reflect.runtime.universe._
 
-class BifrostApp(val settingsFilename: String) extends GenericApplication with Runnable {
-  // use for debug only
-  // val path: Path = Path ("/tmp")
-  // Try(path.deleteRecursively()
-  //
-  //
-  //
-  // )
-
-  override type P = ProofOfKnowledgeProposition[PrivateKey25519]
-  override type BX = BifrostBox
-  override type TX = BifrostTransaction
-  override type PMOD = BifrostBlock
-  override type NVHT = BifrostNodeViewHolder
+class BifrostApp(val settingsFilename: String) extends GenericApplication[
+  Any,
+  ProofOfKnowledgeProposition[PrivateKey25519],
+  BifrostTransaction,
+  BifrostBox,
+  BifrostBlock,
+  BifrostSyncInfo,
+  BifrostHistory,
+  BifrostState,
+  BWallet,
+  BifrostMemPool,
+  BifrostNodeViewHolder
+] with Runnable {
 
   implicit lazy val settings = new ForgingSettings {
     override val settingsJSON: Map[String, circe.Json] = settingsFromFile(settingsFilename)
@@ -57,7 +59,7 @@ class BifrostApp(val settingsFilename: String) extends GenericApplication with R
   println("*****************************")
   val stakeHolderRef: ActorRef = actorSystem.actorOf(Stakeholder.props)
 
-  override val nodeViewHolderRef: ActorRef = actorSystem.actorOf(Props(new NVHT(settings)))
+  override val nodeViewHolderRef: ActorRef = actorSystem.actorOf(Props(new BifrostNodeViewHolder(settings)))
 
   val forger: ActorRef = actorSystem.actorOf(Props(classOf[Forger], settings, nodeViewHolderRef, stakeHolderRef))
 
