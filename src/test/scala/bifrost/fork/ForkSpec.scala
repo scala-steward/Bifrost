@@ -10,7 +10,7 @@ import bifrost.programBoxRegistry.ProgramBoxRegistryOld
 import bifrost.transaction.box.ArbitBox
 import bifrost.transaction.box.proposition.PublicKey25519Proposition
 import bifrost.transaction.proof.Signature25519
-import bifrost.validation.DifficultyBlockValidator
+import bifrost.validation.BifrostBlockValidator
 import io.circe
 import io.circe.syntax._
 import org.scalatest.{BeforeAndAfterAll, Matchers, PropSpec}
@@ -59,7 +59,7 @@ class ForkSpec extends PropSpec
     history = new BifrostHistory(history.storage,
       testSettings_version3,
       Seq(
-        new DifficultyBlockValidator(history.storage)
+        new BifrostBlockValidator(history.storage)
         //new ParentBlockValidator(storage),
         //new SemanticBlockValidator(FastCryptographicHash)
       )
@@ -116,7 +116,7 @@ class ForkSpec extends PropSpec
     history = new BifrostHistory(history.storage,
       testSettings_version3,
       Seq(
-        new DifficultyBlockValidator(history.storage)
+        new BifrostBlockValidator(history.storage)
         //new ParentBlockValidator(storage),
         //new SemanticBlockValidator(FastCryptographicHash)
       )
@@ -149,7 +149,7 @@ class ForkSpec extends PropSpec
     history = new BifrostHistory(history.storage,
       testSettings_version3,
       Seq(
-        new DifficultyBlockValidator(history.storage)
+        new BifrostBlockValidator(history.storage)
         //new ParentBlockValidator(storage),
         //new SemanticBlockValidator(FastCryptographicHash)
       )
@@ -206,7 +206,7 @@ class ForkSpec extends PropSpec
         history = new BifrostHistory(history.storage,
           testSettings_version3,
           Seq(
-            new DifficultyBlockValidator(history.storage)
+            new BifrostBlockValidator(history.storage)
             //new ParentBlockValidator(storage),
             //new SemanticBlockValidator(FastCryptographicHash)
           )

@@ -5,11 +5,11 @@ import java.time.Instant
 import akka.actor._
 import akka.pattern.ask
 import bifrost.blocks.BifrostBlock
-import bifrost.history.BifrostHistory
+import bifrost.history.{BifrostHistory, BifrostSyncInfo}
 import bifrost.mempool.BifrostMemPool
 import bifrost.scorexMod.GenericNodeViewHolder.{CurrentView, GetCurrentView}
 import bifrost.state.BifrostState
-import bifrost.transaction.box.ArbitBox
+import bifrost.transaction.box.{ArbitBox, BifrostBox}
 import bifrost.wallet.BWallet
 import bifrost.inflation.InflationQuery
 import com.google.common.primitives.Longs
@@ -26,10 +26,22 @@ import scala.concurrent.duration._
 import akka.util.Timeout
 import bifrost.block.Block.Version
 import bifrost.transaction.bifrostTransaction.{BifrostTransaction, CoinbaseTransaction}
+import bifrost.types.NodeViewTypes
 
 import scala.util.Try
 
-class Forger(forgerSettings: ForgingSettings, viewHolderRef: ActorRef, stakeHolderRef: ActorRef) extends Actor with ActorLogging {
+class Forger(forgerSettings: ForgingSettings, viewHolderRef: ActorRef, stakeHolderRef: ActorRef) extends NodeViewTypes[
+  Any,
+  ProofOfKnowledgeProposition[PrivateKey25519],
+  BifrostTransaction,
+  BifrostBox,
+  BifrostBlock,
+  BifrostSyncInfo,
+  BifrostHistory,
+  BifrostState,
+  BWallet,
+  BifrostMemPool
+  ] with Actor with ActorLogging {
 
   import bifrost.forging.Forger._
 
@@ -87,31 +99,31 @@ class Forger(forgerSettings: ForgingSettings, viewHolderRef: ActorRef, stakeHold
       forging = false
 
     case CurrentView(h: BifrostHistory, s: BifrostState, w: BWallet, m: BifrostMemPool) =>
-      self ! TryForging(h, s, w, m)
+      self ! TryForging[NodeView]((h, s, w, m))
 
-    case TryForging(h: BifrostHistory, s: BifrostState, w: BWallet, m: BifrostMemPool) =>
+    case TryForging(nodeView:NodeView) =>
       if (forging) {
-        val parent = h.bestBlock
+        val parent = history(nodeView).bestBlock
 
-        h.storage.heightOf(parent.id) match {
-          case Some(x) if (x <= forgerSettings.forkHeight_3x) => {
-            log.info(s"${Console.CYAN}Trying to generate a new block, chain length: ${h.height}${Console.RESET}")
-            log.info("chain difficulty: " + h.difficulty)
+        history(nodeView).storage.heightOf(parent.id) match {
+          case Some(x) if x+1 < forgerSettings.forkHeight_3x => {
+            log.info(s"${Console.CYAN}Trying to generate a new block, chain length: ${history(nodeView).height}${Console.RESET}")
+            log.info("chain difficulty: " + history(nodeView).difficulty)
 
-            val boxes: Seq[ArbitBox] = w.boxes().filter(_.box match {
-              case a: ArbitBox => s.closedBox(a.id).isDefined
+            val boxes: Seq[ArbitBox] = vault(nodeView).boxes().filter(_.box match {
+              case a: ArbitBox => minimalState(nodeView).closedBox(a.id).isDefined
               case _ => false
             }).map(_.box.asInstanceOf[ArbitBox])
 
-            val boxKeys = boxes.flatMap(b => w.secretByPublicImage(b.proposition).map(s => (b, s)))
+            val boxKeys = boxes.flatMap(b => vault(nodeView).secretByPublicImage(b.proposition).map(s => (b, s)))
 
 
             log.debug(s"Trying to generate block on top of ${parent.encodedId} with balance " +
               s"${boxKeys.map(_._1.value).sum}")
 
-            val adjustedTarget = calcAdjustedTarget(h.difficulty, parent, forgerSettings.targetBlockTime.length)
+            val adjustedTarget = calcAdjustedTarget(history(nodeView).difficulty, parent, forgerSettings.targetBlockTime.length)
 
-            iteration(parent, boxKeys, pickTransactions(m, s, parent, (h, s, w, m)).get, adjustedTarget, forgerSettings.version) match {
+            iteration(parent, boxKeys, pickTransactions(memoryPool(nodeView), minimalState(nodeView), parent, nodeView).get, adjustedTarget, forgerSettings.version) match {
               case Some(block) =>
                 log.debug(s"Locally generated block: $block")
                 viewHolderRef !
@@ -122,7 +134,7 @@ class Forger(forgerSettings: ForgingSettings, viewHolderRef: ActorRef, stakeHold
             context.system.scheduler.scheduleOnce(forgerSettings.blockGenerationDelay)(viewHolderRef ! GetCurrentView)
           }
           case _ => {
-            log.info(s"${Console.CYAN}Trying to generate a new ouroboros block, chain length: ${h.height}${Console.RESET}")
+            log.info(s"${Console.CYAN}Trying to generate a new ouroboros block, chain length: ${history(nodeView).height}${Console.RESET}")
 
           }
         }
@@ -141,7 +153,7 @@ object Forger extends ScorexLogging {
 
   case object StopForging
 
-  case class TryForging[HIS, MS, VL, MP](history: HIS, state: MS, vault: VL, pool: MP)
+  case class TryForging[NodeView](nodeView: NodeView)
 
   def hit(lastBlock: BifrostBlock)(box: ArbitBox): Long = {
     val h = FastCryptographicHash(lastBlock.bytes ++ box.bytes)

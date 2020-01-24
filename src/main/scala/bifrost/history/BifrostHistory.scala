@@ -5,7 +5,7 @@ import java.io.File
 import bifrost.blocks.{BifrostBlock, Bloom}
 import bifrost.forging.ForgingSettings
 import bifrost.programBoxRegistry.ProgramBoxRegistryOld
-import bifrost.validation.DifficultyBlockValidator
+import bifrost.validation.{BifrostBlockValidator, BifrostSemanticValidator}
 import io.iohk.iodb.{ByteArrayWrapper, LSMStore}
 import bifrost.NodeViewModifier
 import bifrost.NodeViewModifier.{ModifierId, ModifierTypeId}
@@ -85,37 +85,42 @@ class BifrostHistory(val storage: BifrostStorage,
     validationResults.foreach(_.get)
 
     val res: (BifrostHistory, ProgressInfo[BifrostBlock]) = {
-
-      if (isGenesis(block)) {
-        storage.update(block, settings.InitialDifficulty, isBest = true)
-        val progInfo = ProgressInfo(None, Seq(), Seq(block))
-        (new BifrostHistory(storage, settings, validators), progInfo)
-      } else if (storage.heightOf(block.parentId).get < settings.forkHeight_3x) {
-        val parent = modifierById(block.parentId).get
-        val oldDifficulty = storage.difficultyOf(block.parentId).get
-        var difficulty = (oldDifficulty * settings.targetBlockTime.length) / (block.timestamp - parent.timestamp)
-        if (difficulty < settings.MinimumDifficulty) difficulty = settings.MinimumDifficulty
-        val builtOnBestChain = applicable(block)
-        // Check that the new block's parent is the last best block
-        val mod: ProgressInfo[BifrostBlock] = if (!builtOnBestChain) {
-          log.debug(s"New orphaned block ${Base58.encode(block.id)}")
-          ProgressInfo(None, Seq(), Seq())
-        } else if (block.parentId sameElements storage.bestBlockId) { // new block parent is best block so far
-          log.debug(s"New best block ${Base58.encode(block.id)}")
-          ProgressInfo(None, Seq(), Seq(block))
-        } else { // we want to swap to a fork
-          bestForkChanges(block)
+      block match {
+        case b:BifrostBlock if isGenesis(b) => {
+          storage.update(b, settings.InitialDifficulty, isBest = true)
+          val progInfo = ProgressInfo(None, Seq(), Seq(b))
+          (new BifrostHistory(storage, settings, validators), progInfo)
         }
-        storage.update(block, difficulty, builtOnBestChain)
-        (new BifrostHistory(storage, settings, validators), mod)
-      } else {
-        val mod: ProgressInfo[BifrostBlock] = ProgressInfo(None, Seq(), Seq())
-        storage.update(block, 0L, false)
-        (new BifrostHistory(storage, settings, validators), mod)
+        case b:BifrostBlock if storage.heightOf(b.parentId).get+1 < settings.forkHeight_3x => {
+          val parent = modifierById(b.parentId).get
+          val oldDifficulty = storage.difficultyOf(b.parentId).get
+          var difficulty = (oldDifficulty * settings.targetBlockTime.length) / (b.timestamp - parent.timestamp)
+          if (difficulty < settings.MinimumDifficulty) difficulty = settings.MinimumDifficulty
+          val builtOnBestChain = applicable(b)
+          // Check that the new block's parent is the last best block
+          val mod: ProgressInfo[BifrostBlock] = if (!builtOnBestChain) {
+            log.debug(s"New orphaned block ${Base58.encode(b.id)}")
+            ProgressInfo(None, Seq(), Seq())
+          } else if (b.parentId sameElements storage.bestBlockId) { // new block parent is best block so far
+            log.debug(s"New best block ${Base58.encode(b.id)}")
+            ProgressInfo(None, Seq(), Seq(b))
+          } else { // we want to swap to a fork
+            bestForkChanges(b)
+          }
+          storage.update(b, difficulty, builtOnBestChain)
+          log.info(s"History: block ${Base58.encode(block.id)} appended to chain with score ${storage.scoreOf(block.id)}. " +
+            s"Best score is $score. Pair: ${Base58.encode(bestBlockId)}")
+          (new BifrostHistory(storage, settings, validators), mod)
+        }
+        case b:BifrostBlock => {
+          val mod: ProgressInfo[BifrostBlock] = ProgressInfo(None, Seq(), Seq())
+          storage.update(b,b.ouroborosCertificate)
+          log.info(s"History: block ${Base58.encode(block.id)} appended to chain with slot ${storage.slotOf(block.id)}.")
+          (new BifrostHistory(storage, settings, validators), mod)
+        }
       }
     }
-    log.info(s"History: block ${Base58.encode(block.id)} appended to chain with score ${storage.scoreOf(block.id)}. " +
-               s"Best score is $score. Pair: ${Base58.encode(bestBlockId)}")
+
     res
   }
 
@@ -455,9 +460,8 @@ object BifrostHistory extends ScorexLogging {
     val storage = new BifrostStorage(blockStorage, settings)
 
     val validators = Seq(
-      new DifficultyBlockValidator(storage)
-      //new ParentBlockValidator(storage),
-      //new SemanticBlockValidator(FastCryptographicHash)
+      new BifrostBlockValidator(storage,settings),
+      new BifrostSemanticValidator(storage,settings)
     )
 
     new BifrostHistory(storage, settings, validators)

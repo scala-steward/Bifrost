@@ -13,7 +13,7 @@ import bifrost.transaction.bifrostTransaction.CoinbaseTransaction
 import bifrost.transaction.box.proposition.Proposition
 import bifrost.transaction.serialization.BifrostTransactionCompanion
 import bifrost.transaction.wallet.Vault
-import bifrost.types.BifrostTypes
+import bifrost.types.NodeViewTypes
 import bifrost.utils.ScorexLogging
 import bifrost.{NodeViewModifier, PersistentNodeViewModifier, scorexMod}
 import scorex.crypto.encode.Base58
@@ -32,32 +32,16 @@ trait NodeViewProcessor[
   MS <: GenericBoxMinimalState[T, P, BX, TX, PMOD, MS],
   VL <: Vault[P, TX, PMOD, VL],
   MP <: MemoryPool[TX, MP]
-] extends BifrostTypes[T,P,TX,BX,PMOD,SI,HIS,MS,VL,MP] with Actor with ScorexLogging {
+] extends NodeViewTypes[T,P,TX,BX,PMOD,SI,HIS,MS,VL,MP] with Actor with ScorexLogging {
 
   import scorexMod.GenericNodeViewHolder._
   import NodeViewProcessor._
 
-  val modifierCompanions: Map[ModifierTypeId, Serializer[_ <: NodeViewModifier]] =
-    Map(BifrostBlock.ModifierTypeId -> BifrostBlockCompanion,
-      Transaction.ModifierTypeId -> BifrostTransactionCompanion)
+  val modifierCompanions: Map[ModifierTypeId, Serializer[_ <: NodeViewModifier]]
 
-  //todo: make configurable limited size
-  private val modifiersCache = mutable.Map[ModifierId, (ConnectedPeer, PMOD)]()
+  def notifySubscribers[O <: NodeViewHolderEvent](eventType: EventType.Value, signal: O):Unit = {}
 
-  private def history(nodeView: NodeView): HIS = nodeView._1
-
-  private def minimalState(nodeView: NodeView): MS = nodeView._2
-
-  private def vault(nodeView: NodeView): VL = nodeView._3
-
-  private def memoryPool(nodeView: NodeView): MP = nodeView._4
-
-  private val subscribers = mutable.Map[GenericNodeViewHolder.EventType.Value, Seq[ActorRef]]()
-
-  private def notifySubscribers[O <: NodeViewHolderEvent](eventType: EventType.Value, signal: O) =
-    subscribers.getOrElse(eventType, Seq()).foreach(_ ! signal)
-
-  private def txModify(nodeView: NodeView,tx: TX, source: Option[ConnectedPeer]):NodeView = {
+  def txModify(nodeView: NodeView,tx: TX, source: Option[ConnectedPeer]):NodeView = {
     val updWallet = vault(nodeView).scanOffchain(tx)
     memoryPool(nodeView).put(tx) match {
       case Success(updPool) =>
@@ -71,13 +55,13 @@ trait NodeViewProcessor[
   }
 
   //noinspection ScalaStyle
-  private def pmodModify(nodeView: NodeView,pmod: PMOD, source: Option[ConnectedPeer]): NodeView = if (!history(nodeView).contains(pmod.id)) {
+  def pmodModify(nodeView: NodeView,pmod: PMOD, source: Option[ConnectedPeer]): NodeView = if (!history(nodeView).contains(pmod.id)) {
     notifySubscribers(
       EventType.StartingPersistentModifierApplication,
       StartingPersistentModifierApplication[P, TX, PMOD](pmod)
     )
 
-    log.debug(s"Apply modifier to nodeViewHolder: ${Base58.encode(pmod.id)}")
+    log.debug(s"Apply modifier: ${Base58.encode(pmod.id)}")
 
     history(nodeView).append(pmod) match {
       case Success((newHistory, progressInfo)) => {
@@ -123,7 +107,7 @@ trait NodeViewProcessor[
             }
           }
         } else {
-          nodeView
+          (newHistory,minimalState(nodeView),vault(nodeView),memoryPool(nodeView))
         }
       }
       case Failure(e) => {
@@ -136,15 +120,7 @@ trait NodeViewProcessor[
     nodeView
   }
 
-  private def handleSubscribe: Receive = {
-    case GenericNodeViewHolder.Subscribe(events) =>
-      events.foreach { evt =>
-        val current = subscribers.getOrElse(evt, Seq())
-        subscribers.put(evt, current :+ sender())
-      }
-  }
-
-  private def processModifiers: Receive = {
+  def processModifiers: Receive = {
     case mods:NodeViewProcessorJob[NodeView,LocallyGeneratedTransaction[P,TX]] => {
       var nodeView:NodeView = mods.nodeView
       mods.job foreach { lt:LocallyGeneratedTransaction[P,TX] =>
@@ -161,6 +137,7 @@ trait NodeViewProcessor[
     }
     case mods:NodeViewProcessorJob[NodeView,ModifiersFromRemote] => {
       var nodeView:NodeView = mods.nodeView
+      val modifiersCache = mutable.Map[ModifierId, (ConnectedPeer, PMOD)]()
       mods.job foreach { modifiersFromRemote:ModifiersFromRemote =>
         val remote:ConnectedPeer = modifiersFromRemote.source
         val modifierTypeId:ModifierTypeId = modifiersFromRemote.modifierTypeId
@@ -194,7 +171,6 @@ trait NodeViewProcessor[
   }
 
   override def receive: Receive =
-    handleSubscribe orElse
       processModifiers orElse {
       case a: Any => log.error(s">>>>>>>Strange input: $a :: ${a.getClass}")
     }

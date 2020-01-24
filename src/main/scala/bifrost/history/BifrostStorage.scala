@@ -5,6 +5,7 @@ import bifrost.forging.ForgingSettings
 import com.google.common.primitives.Longs
 import io.iohk.iodb.{ByteArrayWrapper, LSMStore}
 import bifrost.NodeViewModifier._
+import bifrost.consensus.ouroboros.{OuroborosCertificate, OuroborosCertificateCompanion}
 import bifrost.crypto.hash.FastCryptographicHash
 import bifrost.transaction.Transaction
 import bifrost.utils.ScorexLogging
@@ -41,8 +42,8 @@ class BifrostStorage(val storage: LSMStore, val settings: ForgingSettings) exten
           case BifrostBlock.ModifierTypeId =>
             val parsed = {
               heightOf(blockId) match {
-                case Some(x) if (x <= settings.forkHeight_2x) => BifrostBlockCompanion.parseBytes2xAndBefore(bytes.tail)
-                case Some(x) if (x <= settings.forkHeight_3x) => BifrostBlockCompanion.parseBytesNXT(bytes.tail)
+                case Some(x) if x < settings.forkHeight_2x => BifrostBlockCompanion.parseBytes2xAndBefore(bytes.tail)
+                case Some(x) if x < settings.forkHeight_3x => BifrostBlockCompanion.parseBytesNXT(bytes.tail)
                 case _ => BifrostBlockCompanion.parseBytes(bytes.tail)
               }
             }
@@ -106,6 +107,36 @@ class BifrostStorage(val storage: LSMStore, val settings: ForgingSettings) exten
     )
   }
 
+  def update(b: BifrostBlock, certificate: OuroborosCertificate) {
+    val typeByte = BifrostBlock.ModifierTypeId
+
+    val blockH: Iterable[(ByteArrayWrapper, ByteArrayWrapper)] =
+      Seq(blockHeightKey(b.id) -> ByteArrayWrapper(Longs.toByteArray(parentHeight(b) + 1)))
+
+    val parentBlock: Iterable[(ByteArrayWrapper, ByteArrayWrapper)] = {
+      if (b.parentId sameElements settings.GenesisParentId) {
+        Seq()
+      } else {
+        Seq(blockParentKey(b.id) -> ByteArrayWrapper(b.parentId))
+      }
+    }
+
+    val blockBloom: Iterable[(ByteArrayWrapper, ByteArrayWrapper)] =
+      Seq(blockBloomKey(b.id) -> ByteArrayWrapper(BifrostBlock.createBloom(b.txs)))
+
+    val newTransactionsToBlockIds: Iterable[(ByteArrayWrapper, ByteArrayWrapper)] = b.transactions.get.map(
+      tx => (ByteArrayWrapper(tx.id), ByteArrayWrapper(Transaction.ModifierTypeId +: b.id))
+    )
+
+    storage.update(
+      ByteArrayWrapper(b.id),
+      Seq(),
+      blockH ++ newTransactionsToBlockIds ++ blockBloom ++ parentBlock ++
+        Seq(blockCertificateKey(b.id) -> ByteArrayWrapper(OuroborosCertificateCompanion.toBytes(certificate))) ++
+        Seq(ByteArrayWrapper(b.id) -> ByteArrayWrapper(typeByte +: b.bytes))
+    )
+  }
+
   def rollback(modifierId: ModifierId): Try[Unit] = Try {
     storage.rollback(ByteArrayWrapper(modifierId))
   }
@@ -122,6 +153,9 @@ class BifrostStorage(val storage: LSMStore, val settings: ForgingSettings) exten
   private def blockParentKey(blockId: Array[Byte]): ByteArrayWrapper = ByteArrayWrapper(Sha256("parentId"
                                                                                                  .getBytes ++ blockId))
 
+  private def blockCertificateKey(blockId: ModifierId): ByteArrayWrapper =
+    ByteArrayWrapper(Sha256("OBCERT".getBytes ++ blockId))
+
   def blockTimestampKey: ByteArrayWrapper =
     ByteArrayWrapper(FastCryptographicHash("timestamp".getBytes))
 
@@ -133,6 +167,12 @@ class BifrostStorage(val storage: LSMStore, val settings: ForgingSettings) exten
 
   def heightOf(blockId: ModifierId): Option[Long] = storage.get(blockHeightKey(blockId)).map(b => Longs.fromByteArray(b
                                                                                                                         .data))
+
+  def certificateOf(blockId: ModifierId): Option[OuroborosCertificate] = storage.get(blockCertificateKey(blockId)).map(b =>
+    OuroborosCertificateCompanion.parseBytes(b.data).get)
+
+  def slotOf(blockId: ModifierId): Option[Long] = storage.get(blockCertificateKey(blockId)).map(b =>
+    OuroborosCertificateCompanion.parseBytes(b.data).get.getSlot)
 
   def difficultyOf(blockId: ModifierId): Option[Long] = if (blockId sameElements settings.GenesisParentId) {
     Some(settings.InitialDifficulty)

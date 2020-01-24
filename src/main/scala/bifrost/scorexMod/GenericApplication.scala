@@ -13,7 +13,7 @@ import bifrost.settings.Settings
 import bifrost.transaction.MemoryPool
 import bifrost.transaction.box.proposition.Proposition
 import bifrost.transaction.wallet.Vault
-import bifrost.types.BifrostTypes
+import bifrost.types.NodeViewTypes
 import bifrost.utils.ScorexLogging
 
 import scala.concurrent.ExecutionContext.Implicits.global
@@ -31,7 +31,7 @@ trait GenericApplication[
   VL <: Vault[P, TX, PMOD, VL],
   MP <: MemoryPool[TX, MP],
   NVHT <: GenericNodeViewHolder[T, P, TX, BX, PMOD,SI,HIS,MS,VL,MP]
-] extends BifrostTypes[T,P,TX,BX,PMOD,SI,HIS,MS,VL,MP] with ScorexLogging {
+] extends NodeViewTypes[T,P,TX,BX,PMOD,SI,HIS,MS,VL,MP] with ScorexLogging {
 
   val ApplicationNameLimit = 50
 

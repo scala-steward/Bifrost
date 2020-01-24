@@ -20,6 +20,8 @@ class OuroborosCertificate(slot:Long,
     (slot, rho_nonce, pi_nonce, y_test, pi_test, pk_sig, pk_vrf, pk_kes, threshold)
   }
 
+  def getSlot:Long = slot
+
 }
 
 object OuroborosCertificate {

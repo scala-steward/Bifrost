@@ -33,5 +33,6 @@ class BifrostNodeViewProcessor(settings: ForgingSettings)
     BWallet,
     BifrostMemPool
   ] {
-
+  override val modifierCompanions: Map[ModifierTypeId, Serializer[_ <: NodeViewModifier]] = Map(BifrostBlock.ModifierTypeId -> BifrostBlockCompanion,
+    Transaction.ModifierTypeId -> BifrostTransactionCompanion)
 }

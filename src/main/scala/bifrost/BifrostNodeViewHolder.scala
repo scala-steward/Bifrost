@@ -16,7 +16,7 @@ import bifrost.transaction.bifrostTransaction.{ArbitTransfer, BifrostTransaction
 import bifrost.transaction.box.proposition.{ProofOfKnowledgeProposition, PublicKey25519Proposition}
 import bifrost.transaction.serialization.BifrostTransactionCompanion
 import bifrost.transaction.state.{PrivateKey25519, PrivateKey25519Companion}
-import bifrost.types.BifrostTypes
+import bifrost.types.NodeViewTypes
 import bifrost.utils.ScorexLogging
 import scorex.crypto.encode.Base58
 
@@ -70,7 +70,7 @@ class BifrostNodeViewHolder(settings: ForgingSettings)
   }
 }
 
-object BifrostNodeViewHolder extends BifrostTypes[
+object BifrostNodeViewHolder extends NodeViewTypes[
   Any,
   ProofOfKnowledgeProposition[PrivateKey25519],
   BifrostTransaction,

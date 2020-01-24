@@ -59,6 +59,9 @@ case class BifrostBlock(override val parentId: BlockId,
     "version" -> version.asJson,
     "blockSize" -> serializer.toBytes(this).length.asJson
   ).asJson
+
+  def signingBytes:Array[Byte] = BifrostBlock(parentId, timestamp, forgerBox, Signature25519(Array.empty), txs, inflation, protocolVersion = version).bytes
+
 }
 
 object BifrostBlock {
