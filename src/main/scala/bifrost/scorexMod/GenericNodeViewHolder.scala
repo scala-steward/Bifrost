@@ -39,6 +39,8 @@ trait GenericNodeViewHolder[
 
   val networkChunkSize: Int
 
+  var global_slot:Long = 0L
+
   //todo: make configurable limited size
   val modifiersCache = mutable.Map[ModifierId, (ConnectedPeer, PMOD)]()
 

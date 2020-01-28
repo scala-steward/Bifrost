@@ -28,8 +28,6 @@ class BifrostBlockValidator(storage: BifrostStorage, settings: ForgingSettings) 
 
         }
       }
-
-
     }
   }
 }

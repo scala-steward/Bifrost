@@ -17,7 +17,7 @@ class BifrostSemanticValidator(storage: BifrostStorage, settings: ForgingSetting
     if (!storage.isGenesis(block)) {
       require(
         ByteArrayWrapper(block.id) ==
-          ByteArrayWrapper(FastCryptographicHash(BifrostBlockCompanion.messageToSign(block)))
+          ByteArrayWrapper(FastCryptographicHash(BifrostBlockCompanion.toBytes(block)))
       )
     }
   }

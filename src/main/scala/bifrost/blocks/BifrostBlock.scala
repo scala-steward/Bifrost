@@ -46,7 +46,7 @@ case class BifrostBlock(override val parentId: BlockId,
 
   override lazy val version: Version = protocolVersion
 
-  override lazy val id: BlockId = FastCryptographicHash(serializer.messageToSign(this))
+  override lazy val id: BlockId = FastCryptographicHash(serializer.toBytes(this))
 
   override lazy val json: Json = Map(
     "id" -> Base58.encode(id).asJson,
@@ -60,7 +60,7 @@ case class BifrostBlock(override val parentId: BlockId,
     "blockSize" -> serializer.toBytes(this).length.asJson
   ).asJson
 
-  def signingBytes:Array[Byte] = BifrostBlock(parentId, timestamp, forgerBox, Signature25519(Array.empty), txs, inflation, protocolVersion = version).bytes
+  def oldSigningBytes:Array[Byte] = BifrostBlock(parentId, timestamp, forgerBox, Signature25519(Array.empty), txs, inflation, protocolVersion = version).bytes
 
 }
 
@@ -90,7 +90,7 @@ object BifrostBlock {
       val genesisSignature = Array.fill(Curve25519.SignatureLength25519)(1: Byte)
       unsigned.copy(signature = Signature25519(genesisSignature))
     } else {
-      val signature = Curve25519.sign(privateKey.privKeyBytes, unsigned.bytes)
+      val signature = Curve25519.sign(privateKey.privKeyBytes, BifrostBlockCompanion.messageToSign(unsigned))
       unsigned.copy(signature = Signature25519(signature))
     }
   }
@@ -112,9 +112,9 @@ object BifrostBlockCompanion extends Serializer[BifrostBlock] {
   def messageToSign(block: BifrostBlock): Array[Byte] = {
     val commonBytes: Array[Byte] = {
       block.version match {
-        case `obversion` => commonMessageOuroboros(block)
-        case 0 => commonMessage2xAndBefore(block)
-        case _ => commonMessageNXT(block)
+        case `obversion` => commonMessageOuroboros(block,false)
+        case 0 => commonMessage2xAndBefore(block,false)
+        case _ => commonMessageNXT(block,false)
       }
     }
     //noinspection ScalaStyle
@@ -126,74 +126,104 @@ object BifrostBlockCompanion extends Serializer[BifrostBlock] {
   }
 
   override def toBytes(block: BifrostBlock): Array[Byte] = {
-    block.version match {
-      case `obversion` =>
-        commonMessageOuroboros(block) ++ block.txs.foldLeft(Array[Byte]())((bytes, tx) =>
-          bytes ++
-            Ints.toByteArray(BifrostTransactionCompanion.toBytes(tx).length) ++
-            BifrostTransactionCompanion.toBytes(tx))
-      case 0 =>
-        commonMessage2xAndBefore(block) ++ block.txs.foldLeft(Array[Byte]())((bytes, tx) =>
-          bytes ++
-            Ints.toByteArray(BifrostTransactionCompanion.toBytes(tx).length) ++
-            BifrostTransactionCompanion.toBytes(tx))
-      case _ =>
-        commonMessageNXT(block) ++ block.txs.foldLeft(Array[Byte]())((bytes, tx) =>
-          bytes ++
-            Ints.toByteArray(BifrostTransactionCompanion.toBytes(tx).length) ++
-            BifrostTransactionCompanion.toBytes(tx))
+    val commonBytes: Array[Byte] = {
+      block.version match {
+        case `obversion` => commonMessageOuroboros(block,true)
+        case 0 => commonMessage2xAndBefore(block,true)
+        case _ => commonMessageNXT(block,true)
+      }
+    }
+    //noinspection ScalaStyle
+    if (block.parentId sameElements Array.fill(32)(1: Byte)) {
+      commonBytes ++ block.txs.foldLeft(Array[Byte]())((bytes, tx) => bytes ++ Ints.toByteArray(BifrostTransactionCompanion.toBytes(tx).length) ++ tx.messageToSign)
+    } else {
+      commonBytes ++ block.txs.foldLeft(Array[Byte]())((bytes, tx) => bytes ++ Ints.toByteArray(BifrostTransactionCompanion.toBytes(tx).length) ++ BifrostTransactionCompanion.toBytes(tx))
     }
   }
 
-  def commonMessageOuroboros(block: BifrostBlock): Array[Byte] = {
+  def commonMessageOuroboros(block: BifrostBlock,includeSig:Boolean): Array[Byte] = {
     val numTx = Ints.toByteArray(block.txs.length)
+    if (includeSig) {
+      Bytes.concat(
+        block.parentId,
+        Longs.toByteArray(block.timestamp),
+        Array(block.version),
+        Longs.toByteArray(block.inflation),
+        OuroborosCertificateCompanion.toBytes(block.ouroborosCertificate),
+        block.signature.signature,
+        Ints.toByteArray(block.kesSignature._1.length),
+        block.kesSignature._1,
+        Ints.toByteArray(block.kesSignature._2.length),
+        block.kesSignature._2,
+        Ints.toByteArray(block.kesSignature._3.length),
+        block.kesSignature._3,
+        numTx // writes number of transactions, then adds <tx as bytes>| <number of bytes for tx as bytes> for each tx
+      )
+    } else {
+      Bytes.concat(
+        block.parentId,
+        Longs.toByteArray(block.timestamp),
+        Array(block.version),
+        Longs.toByteArray(block.inflation),
+        OuroborosCertificateCompanion.toBytes(block.ouroborosCertificate),
+        numTx // writes number of transactions, then adds <tx as bytes>| <number of bytes for tx as bytes> for each tx
+      )
+    }
 
-    Bytes.concat(
-      block.parentId,
-      Longs.toByteArray(block.timestamp),
-      Array(block.version),
-      Longs.toByteArray(block.inflation),
-      OuroborosCertificateCompanion.toBytes(block.ouroborosCertificate),
-      block.signature.signature,
-      Ints.toByteArray(block.kesSignature._1.length),
-      block.kesSignature._1,
-      Ints.toByteArray(block.kesSignature._2.length),
-      block.kesSignature._2,
-      Ints.toByteArray(block.kesSignature._3.length),
-      block.kesSignature._3,
-      numTx // writes number of transactions, then adds <tx as bytes>| <number of bytes for tx as bytes> for each tx
-    )
   }
 
-  def commonMessageNXT(block: BifrostBlock): Array[Byte] = {
+  def commonMessageNXT(block: BifrostBlock,includeSig:Boolean): Array[Byte] = {
     val numTx = Ints.toByteArray(block.txs.length)
     val generatorBoxBytes = BifrostBoxSerializer.toBytes(block.forgerBox)
+    if (includeSig) {
+      Bytes.concat(
+        block.parentId,
+        Longs.toByteArray(block.timestamp),
+        Longs.toByteArray(generatorBoxBytes.length),
+        Array(block.version),
+        generatorBoxBytes,
+        Longs.toByteArray(block.inflation),
+        block.signature.signature,
+        numTx // writes number of transactions, then adds <tx as bytes>| <number of bytes for tx as bytes> for each tx
+      )
+    } else {
+      Bytes.concat(
+        block.parentId,
+        Longs.toByteArray(block.timestamp),
+        Longs.toByteArray(generatorBoxBytes.length),
+        Array(block.version),
+        generatorBoxBytes,
+        Longs.toByteArray(block.inflation),
+        numTx // writes number of transactions, then adds <tx as bytes>| <number of bytes for tx as bytes> for each tx
+      )
+    }
 
-    Bytes.concat(
-      block.parentId,
-      Longs.toByteArray(block.timestamp),
-      Longs.toByteArray(generatorBoxBytes.length),
-      Array(block.version),
-      generatorBoxBytes,
-      Longs.toByteArray(block.inflation),
-      block.signature.signature,
-      numTx // writes number of transactions, then adds <tx as bytes>| <number of bytes for tx as bytes> for each tx
-    )
   }
 
-  def commonMessage2xAndBefore(block: BifrostBlock): Array[Byte] = {
+  def commonMessage2xAndBefore(block: BifrostBlock,includeSig:Boolean): Array[Byte] = {
     val numTx = Ints.toByteArray(block.txs.length)
     val generatorBoxBytes = BifrostBoxSerializer.toBytes(block.forgerBox)
+    if (includeSig) {
+      Bytes.concat(
+        block.parentId,
+        Longs.toByteArray(block.timestamp),
+        Longs.toByteArray(generatorBoxBytes.length),
+        Array(block.version),
+        generatorBoxBytes,
+        block.signature.signature,
+        numTx // writes number of transactions, then adds <tx as bytes>| <number of bytes for tx as bytes> for each tx
+      )
+    } else {
+      Bytes.concat(
+        block.parentId,
+        Longs.toByteArray(block.timestamp),
+        Longs.toByteArray(generatorBoxBytes.length),
+        Array(block.version),
+        generatorBoxBytes,
+        numTx // writes number of transactions, then adds <tx as bytes>| <number of bytes for tx as bytes> for each tx
+      )
+    }
 
-    Bytes.concat(
-      block.parentId,
-      Longs.toByteArray(block.timestamp),
-      Longs.toByteArray(generatorBoxBytes.length),
-      Array(block.version),
-      generatorBoxBytes,
-      block.signature.signature,
-      numTx // writes number of transactions, then adds <tx as bytes>| <number of bytes for tx as bytes> for each tx
-    )
   }
 
   override def parseBytes(bytes: Array[ModifierTypeId]): Try[BifrostBlock] = Try {

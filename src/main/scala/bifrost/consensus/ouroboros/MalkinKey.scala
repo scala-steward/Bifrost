@@ -7,8 +7,8 @@ class MalkinKey {
   private var pki:Array[Byte] = Array()
   private var rp:Array[Byte] = Array()
 
-  def update(kes:Kes,t:Int) = {
-    val updatedKey = kes.updateKey((L,Si,sig,pki,rp),t)
+  def update(kes:Kes,step:Long) = {
+    val updatedKey = kes.updateKey((L,Si,sig,pki,rp),step)
     L = updatedKey._1
     Si = updatedKey._2
     sig = updatedKey._3
@@ -24,16 +24,16 @@ class MalkinKey {
     kes.publicKey((L,Si,sig,pki,rp))
   }
 
-  def time(kes:Kes):Int = {
+  def time(kes:Kes):Long = {
     kes.getKeyTimeStep((L,Si,sig,pki,rp))
   }
 
 }
 
 object MalkinKey {
-  def apply(kes:Kes,seed:Array[Byte],t:Int):MalkinKey = {
+  def apply(kes:Kes,seed:Array[Byte],step:Long):MalkinKey = {
     val keyData = kes.generateKey(seed)
-    val updatedKeyData = kes.updateKey(keyData,t)
+    val updatedKeyData = kes.updateKey(keyData,step)
     val newKey = new MalkinKey
     newKey.L = updatedKeyData._1
     newKey.Si = updatedKeyData._2

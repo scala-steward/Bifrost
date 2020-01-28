@@ -5,7 +5,7 @@ import java.io.File
 import bifrost.blocks.{BifrostBlock, Bloom}
 import bifrost.forging.ForgingSettings
 import bifrost.programBoxRegistry.ProgramBoxRegistryOld
-import bifrost.validation.{BifrostBlockValidator, BifrostSemanticValidator}
+import bifrost.validation.{BifrostBlockValidator, BifrostSemanticValidator, BifrostSignatureValidator}
 import io.iohk.iodb.{ByteArrayWrapper, LSMStore}
 import bifrost.NodeViewModifier
 import bifrost.NodeViewModifier.{ModifierId, ModifierTypeId}
@@ -461,7 +461,8 @@ object BifrostHistory extends ScorexLogging {
 
     val validators = Seq(
       new BifrostBlockValidator(storage,settings),
-      new BifrostSemanticValidator(storage,settings)
+      new BifrostSemanticValidator(storage,settings),
+      new BifrostSignatureValidator(storage,settings)
     )
 
     new BifrostHistory(storage, settings, validators)

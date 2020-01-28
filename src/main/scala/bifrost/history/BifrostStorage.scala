@@ -172,7 +172,7 @@ class BifrostStorage(val storage: LSMStore, val settings: ForgingSettings) exten
     OuroborosCertificateCompanion.parseBytes(b.data).get)
 
   def slotOf(blockId: ModifierId): Option[Long] = storage.get(blockCertificateKey(blockId)).map(b =>
-    OuroborosCertificateCompanion.parseBytes(b.data).get.getSlot)
+    OuroborosCertificateCompanion.parseBytes(b.data).get.get_slot)
 
   def difficultyOf(blockId: ModifierId): Option[Long] = if (blockId sameElements settings.GenesisParentId) {
     Some(settings.InitialDifficulty)

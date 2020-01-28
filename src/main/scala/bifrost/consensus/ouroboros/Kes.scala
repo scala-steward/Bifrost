@@ -36,8 +36,8 @@ class Kes {
     * @param n integer
     * @return 2 to the n
     */
-  def exp(n: Int): Int = {
-    scala.math.pow(2,n).toInt
+  def exp(n: Long): Long = {
+    scala.math.pow(2,n).toLong
   }
 
   /**
@@ -136,10 +136,10 @@ class Kes {
     * @param i height of tree
     * @return binary tree at time step 0
     */
-  def sumGenerateKey(seed: Array[Byte],i:Int):Tree[Array[Byte]] = {
+  def sumGenerateKey(seed: Array[Byte],i:Long):Tree[Array[Byte]] = {
 
     // generate the binary tree with the pseudorandom number generator
-    def sumKeyGenMerkle(seed: Array[Byte],i:Int): Tree[Array[Byte]] = {
+    def sumKeyGenMerkle(seed: Array[Byte],i:Long): Tree[Array[Byte]] = {
       if (i==0){
         Leaf(seed)
       } else {
@@ -316,10 +316,10 @@ class Kes {
   /**
     * Updates the key in the sum composition
     * @param key binary tree to be updated
-    * @param t time step key is to be updated to
+    * @param step time step key is to be updated to
     * @return updated key to be written to key
     */
-  def sumUpdate(key: Tree[Array[Byte]],t:Int): Tree[Array[Byte]] = {
+  def sumUpdate(key: Tree[Array[Byte]],step:Long): Tree[Array[Byte]] = {
     //checks if the sub tree is right most
     def isRightBranch(t: Tree[Array[Byte]]): Boolean = {
       t match {
@@ -398,15 +398,15 @@ class Kes {
     val T = exp(key.height)
     val keyTime = sumGetKeyTimeStep(key)
     //steps key through time steps one at a time until key step == t
-    if (t<T && keyTime < t){
+    if (step<T && keyTime < step){
       var tempKey = key
-      for(i <- keyTime+1 to t) {
+      for(i <- keyTime+1 to step) {
         tempKey = loop(tempKey)
       }
       tempKey
     } else {
       println("Time step error, key not updated")
-      println("T: "+T.toString+", key t:"+keyTime.toString+", t:"+t.toString)
+      println("T: "+T.toString+", key t:"+keyTime.toString+", t:"+step.toString)
       key
     }
   }
@@ -418,7 +418,7 @@ class Kes {
     * @param step  current time step of signing key sk
     * @return byte array signature
     */
-  def sumSign(sk: Tree[Array[Byte]],m: Array[Byte],step:Int): Array[Byte] = {
+  def sumSign(sk: Tree[Array[Byte]],m: Array[Byte],step:Long): Array[Byte] = {
     assert(step == sumGetKeyTimeStep(sk))
     assert(sumVerifyKeyPair(sk,sumGetPublicKey(sk)))
     val stepBytesBigInt = BigInt(step).toByteArray
@@ -497,23 +497,23 @@ class Kes {
     * @param key binary tree key
     * @return time step
     */
-  def sumGetKeyTimeStep(key: Tree[Array[Byte]]): Int = {
+  def sumGetKeyTimeStep(key: Tree[Array[Byte]]): Long = {
     key match {
       case n: Node[Array[Byte]] => {
         val left = n.l match {
           case n: Node[Array[Byte]] => {sumGetKeyTimeStep(n)}
-          case l: Leaf[Array[Byte]] => {0}
-          case _ => 0
+          case l: Leaf[Array[Byte]] => {0L}
+          case _ => 0L
         }
         val right = n.r match {
           case n: Node[Array[Byte]] => {sumGetKeyTimeStep(n)+exp(n.height)}
-          case l: Leaf[Array[Byte]] => {1}
-          case _ => 0
+          case l: Leaf[Array[Byte]] => {1L}
+          case _ => 0L
         }
         left+right
       }
-      case l: Leaf[Array[Byte]] => 0
-      case _ => 0
+      case l: Leaf[Array[Byte]] => 0L
+      case _ => 0L
     }
   }
 
@@ -539,10 +539,10 @@ class Kes {
     * Updates the key in the MMM composition (product composition with increasing height for
     * Si as L increments)
     * @param key  MMM key to be updated
-    * @param t time step key is to be updated to
+    * @param step time step key is to be updated to
     * @return updated MMM key
     */
-  def updateKey(key: MalkinKey,t:Int): MalkinKey = {
+  def updateKey(key: MalkinKey,step:Long): MalkinKey = {
     val keyTime = getKeyTimeStep(key)
     var L = key._1
     var Si = key._2
@@ -553,8 +553,8 @@ class Kes {
     var Ti = exp(Si.height)
     var tl = sumGetKeyTimeStep(L)
     var ti = sumGetKeyTimeStep(Si)
-    if (keyTime < t) {
-      for(i <- keyTime+1 to t) {
+    if (keyTime < step) {
+      for(i <- keyTime+1 to step) {
         tl = sumGetKeyTimeStep(L)
         ti = sumGetKeyTimeStep(Si)
         if (ti+1 < Ti) {
@@ -577,63 +577,11 @@ class Kes {
   }
 
   /**
-    * Fast version on updateKey, should be equivalent input and output
-    * @param key
-    * @param t
-    * @return  updated key
-    */
-  def updateKeyFast(key: MalkinKey,t:Int): MalkinKey = {
-    val keyTime = getKeyTimeStep(key)
-    var L = key._1
-    var Si = key._2
-    var sig = key._3
-    var pki = key._4
-    var seed = key._5
-    val Tl = exp(L.height)
-    var Ti = exp(Si.height)
-    var tl = sumGetKeyTimeStep(L)
-    var ti = sumGetKeyTimeStep(Si)
-    if (keyTime < t) {
-      var i = keyTime+1
-      while(i < t) {
-        tl = sumGetKeyTimeStep(L)
-        ti = sumGetKeyTimeStep(Si)
-        if (t-i > exp(tl)-ti) {
-          val r = PRNG(seed)
-          seed = r._2
-          L = sumUpdate(L, tl + 1)
-          tl = sumGetKeyTimeStep(L)
-          sig = sumSign(L,pki,tl)
-        } else {
-          if (ti+1 < Ti) {
-            Si = sumUpdate(Si, ti + 1)
-          } else if (tl < Tl) {
-            val r = PRNG(seed)
-            Si = sumGenerateKey(r._1, tl + 1)
-            pki = sumGetPublicKey(Si)
-            seed = r._2
-            Ti = exp(Si.height)
-            L = sumUpdate(L, tl + 1)
-            tl = sumGetKeyTimeStep(L)
-            sig = sumSign(L,pki,tl)
-          } else {
-            println("Error: max time steps reached")
-          }
-        }
-        i+=1
-      }
-    } else {
-      println("Error: t less than given keyTime")
-    }
-    (L,Si,sig,pki,seed)
-  }
-
-  /**
     * Get the current time step of an MMM key
     * @param key MMM key to be inspected
     * @return Current time step of key
     */
-  def getKeyTimeStep(key: MalkinKey): Int = {
+  def getKeyTimeStep(key: MalkinKey): Long = {
     val L = key._1
     val Si = key._2
     val tl = sumGetKeyTimeStep(L)
@@ -667,13 +615,13 @@ class Kes {
     * @param sig signature to be verified
     * @return true if signature is valid false if otherwise
     */
-  def verify(pk: Array[Byte],m: Array[Byte],sig: MalkinSignature,t: Int): Boolean = {
+  def verify(pk: Array[Byte],m: Array[Byte],sig: MalkinSignature,step: Long): Boolean = {
     val sigi = sig._1
     val sigm = sig._2
     val pki = sig._3
-    val stepL = BigInt(sigi.slice(sigBytes+pkBytes,sigBytes+pkBytes+seedBytes)).toInt
-    val stepSi = BigInt(sigm.slice(sigBytes+pkBytes,sigBytes+pkBytes+seedBytes)).toInt
-    sumVerify(pk,pki,sigi) && sumVerify(pki,m++BigInt(t).toByteArray,sigm) && (t==exp(stepL)-1+stepSi)
+    val stepL = BigInt(sigi.slice(sigBytes+pkBytes,sigBytes+pkBytes+seedBytes)).toLong
+    val stepSi = BigInt(sigm.slice(sigBytes+pkBytes,sigBytes+pkBytes+seedBytes)).toLong
+    sumVerify(pk,pki,sigi) && sumVerify(pki,m++BigInt(step).toByteArray,sigm) && (step==exp(stepL)-1+stepSi)
   }
 
   /**
